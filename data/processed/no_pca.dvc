@@ -1,0 +1,6 @@
+outs:
+- md5: 74f59833ef909acc4bb2b24cb78984f0.dir
+  size: 1415602
+  nfiles: 4
+  hash: md5
+  path: no_pca

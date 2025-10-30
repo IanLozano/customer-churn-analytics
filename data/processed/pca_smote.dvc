@@ -1,0 +1,6 @@
+outs:
+- md5: 1d059812588d5f8b87ba3f720f0d92d6.dir
+  size: 1784740
+  nfiles: 4
+  hash: md5
+  path: pca_smote

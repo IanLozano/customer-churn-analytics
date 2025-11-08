@@ -1,0 +1,14 @@
+artifact_uri: file:///C:/Users/b_o_x/Desktop/proyecto-analitica/mlruns/861949064364458891/888f304c6a2549cea537c7ae8e37e4ef/artifacts
+end_time: 1762563955593
+entry_point_name: ''
+experiment_id: '861949064364458891'
+lifecycle_stage: active
+run_id: 888f304c6a2549cea537c7ae8e37e4ef
+run_name: XGB_FE3_balanceado_sin_PCA
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1762563949889
+status: 3
+tags: []
+user_id: b_o_x

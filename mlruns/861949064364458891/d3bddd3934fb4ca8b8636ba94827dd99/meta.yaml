@@ -1,0 +1,14 @@
+artifact_uri: file:///C:/Users/b_o_x/Desktop/proyecto-analitica/mlruns/861949064364458891/d3bddd3934fb4ca8b8636ba94827dd99/artifacts
+end_time: 1762564099446
+entry_point_name: ''
+experiment_id: '861949064364458891'
+lifecycle_stage: active
+run_id: d3bddd3934fb4ca8b8636ba94827dd99
+run_name: BEST | FE4_pca_smote | pyfunc_threshold
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1762564094341
+status: 3
+tags: []
+user_id: b_o_x

@@ -1,0 +1,8 @@
+              precision    recall  f1-score   support
+
+No churn (0)       0.93      0.75      0.83      4139
+   Churn (1)       0.79      0.94      0.86      4139
+
+    accuracy                           0.84      8278
+   macro avg       0.86      0.84      0.84      8278
+weighted avg       0.86      0.84      0.84      8278

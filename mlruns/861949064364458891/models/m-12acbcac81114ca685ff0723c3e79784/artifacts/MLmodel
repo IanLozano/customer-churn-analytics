@@ -1,0 +1,22 @@
+artifact_path: file:///C:/Users/b_o_x/Desktop/proyecto-analitica/mlruns/861949064364458891/models/m-12acbcac81114ca685ff0723c3e79784/artifacts
+flavors:
+  python_function:
+    data: model.xgb
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.xgboost
+    python_version: 3.13.5
+  xgboost:
+    code: null
+    data: model.xgb
+    model_class: xgboost.sklearn.XGBClassifier
+    model_format: xgb
+    xgb_version: 3.1.1
+mlflow_version: 3.5.1
+model_id: m-12acbcac81114ca685ff0723c3e79784
+model_size_bytes: 56166
+model_uuid: m-12acbcac81114ca685ff0723c3e79784
+prompts: null
+run_id: 888f304c6a2549cea537c7ae8e37e4ef
+utc_time_created: '2025-11-08 01:05:50.314432'

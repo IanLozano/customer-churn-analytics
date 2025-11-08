@@ -1,0 +1,14 @@
+artifact_uri: file:C:/Users/b_o_x/Desktop/proyecto-analitica/mlruns/614752316775172876/9736d8b0df02431ebb05901c5a62d96a/artifacts
+end_time: 1762564094335
+entry_point_name: ''
+experiment_id: '614752316775172876'
+lifecycle_stage: active
+run_id: 9736d8b0df02431ebb05901c5a62d96a
+run_name: mercurial-gnat-122
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1762564093595
+status: 3
+tags: []
+user_id: b_o_x

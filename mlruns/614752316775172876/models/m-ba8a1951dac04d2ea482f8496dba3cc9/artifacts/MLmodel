@@ -1,0 +1,64 @@
+artifact_path: file:C:/Users/b_o_x/Desktop/proyecto-analitica/mlruns/614752316775172876/models/m-ba8a1951dac04d2ea482f8496dba3cc9/artifacts
+flavors:
+  python_function:
+    data: model.xgb
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.xgboost
+    python_version: 3.13.5
+  xgboost:
+    code: null
+    data: model.xgb
+    model_class: xgboost.sklearn.XGBClassifier
+    model_format: xgb
+    xgb_version: 3.1.1
+is_signature_from_type_hint: false
+mlflow_version: 3.5.1
+model_id: m-ba8a1951dac04d2ea482f8496dba3cc9
+model_size_bytes: 399843
+model_uuid: m-ba8a1951dac04d2ea482f8496dba3cc9
+prompts: null
+run_id: 9d2975bf201a47b89e76e770bc00a496
+saved_input_example_info:
+  artifact_path: input_example.json
+  pandas_orient: split
+  serving_input_path: serving_input_example.json
+  type: dataframe
+signature:
+  inputs: '[{"type": "double", "name": "Componente_PCA_1", "required": true}, {"type":
+    "double", "name": "Componente_PCA_2", "required": true}, {"type": "double", "name":
+    "Contract_Month-to-month", "required": true}, {"type": "double", "name": "Contract_One
+    year", "required": true}, {"type": "double", "name": "Contract_Two year", "required":
+    true}, {"type": "double", "name": "OnlineSecurity_No", "required": true}, {"type":
+    "double", "name": "OnlineSecurity_No internet service", "required": true}, {"type":
+    "double", "name": "OnlineSecurity_Yes", "required": true}, {"type": "double",
+    "name": "TechSupport_No", "required": true}, {"type": "double", "name": "TechSupport_No
+    internet service", "required": true}, {"type": "double", "name": "TechSupport_Yes",
+    "required": true}, {"type": "double", "name": "InternetService_DSL", "required":
+    true}, {"type": "double", "name": "InternetService_Fiber optic", "required": true},
+    {"type": "double", "name": "InternetService_No", "required": true}, {"type": "double",
+    "name": "PaymentMethod_Bank transfer (automatic)", "required": true}, {"type":
+    "double", "name": "PaymentMethod_Credit card (automatic)", "required": true},
+    {"type": "double", "name": "PaymentMethod_Electronic check", "required": true},
+    {"type": "double", "name": "PaymentMethod_Mailed check", "required": true}, {"type":
+    "double", "name": "OnlineBackup_No", "required": true}, {"type": "double", "name":
+    "OnlineBackup_No internet service", "required": true}, {"type": "double", "name":
+    "OnlineBackup_Yes", "required": true}, {"type": "double", "name": "DeviceProtection_No",
+    "required": true}, {"type": "double", "name": "DeviceProtection_No internet service",
+    "required": true}, {"type": "double", "name": "DeviceProtection_Yes", "required":
+    true}, {"type": "double", "name": "StreamingMovies_No", "required": true}, {"type":
+    "double", "name": "StreamingMovies_No internet service", "required": true}, {"type":
+    "double", "name": "StreamingMovies_Yes", "required": true}, {"type": "double",
+    "name": "StreamingTV_No", "required": true}, {"type": "double", "name": "StreamingTV_No
+    internet service", "required": true}, {"type": "double", "name": "StreamingTV_Yes",
+    "required": true}, {"type": "double", "name": "PaperlessBilling_No", "required":
+    true}, {"type": "double", "name": "PaperlessBilling_Yes", "required": true}, {"type":
+    "double", "name": "Dependents_No", "required": true}, {"type": "double", "name":
+    "Dependents_Yes", "required": true}, {"type": "double", "name": "Partner_No",
+    "required": true}, {"type": "double", "name": "Partner_Yes", "required": true},
+    {"type": "double", "name": "SeniorCitizen", "required": true}]'
+  outputs: '[{"type": "tensor", "tensor-spec": {"dtype": "float32", "shape": [-1]}}]'
+  params: null
+type_hint_from_example: false
+utc_time_created: '2025-11-08 01:07:49.488566'

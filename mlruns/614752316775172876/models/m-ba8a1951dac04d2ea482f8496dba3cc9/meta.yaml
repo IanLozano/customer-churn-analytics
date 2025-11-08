@@ -1,0 +1,10 @@
+artifact_location: file:C:/Users/b_o_x/Desktop/proyecto-analitica/mlruns/614752316775172876/models/m-ba8a1951dac04d2ea482f8496dba3cc9/artifacts
+creation_timestamp: 1762564069406
+experiment_id: '614752316775172876'
+last_updated_timestamp: 1762564074980
+model_id: m-ba8a1951dac04d2ea482f8496dba3cc9
+model_type: null
+name: model
+source_run_id: 9d2975bf201a47b89e76e770bc00a496
+status: 2
+status_message: null

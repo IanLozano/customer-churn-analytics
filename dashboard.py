@@ -1,3 +1,7 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import os
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -6,46 +10,81 @@ import requests
 from dash import Dash, dcc, html, Input, Output, State
 
 # =========================
-# Datos sintéticos (Telco)
+# Config / Paths
 # =========================
-'''
-np.random.seed(42)
-df = pd.DataFrame({
-    "Churn": np.random.choice(["Yes", "No"], size=7000, p=[0.26, 0.74]),
-    "MonthlyCharges": np.random.normal(65, 20, 7000).clip(20, 120),
-    "Tenure": np.random.randint(0, 72, 7000),
-    "Contract": np.random.choice(["Month-to-month", "One year", "Two year"], size=7000, p=[0.55, 0.23, 0.22]),
-})
-'''
-# =========================
-# Datos REALES (Telco)
-# =========================
-import pandas as pd
-import numpy as np
-
 DATA_PATH = "data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv"
+API_URL_BATCH = "http://127.0.0.1:8000/predict_batch"  # opcional: endpoint real por lote
 
+# =========================
+# Carga y limpieza (Datos REALES Telco)
+# =========================
 df = pd.read_csv(DATA_PATH)
 
+# Asegurar tipos numéricos
 df['MonthlyCharges'] = pd.to_numeric(df['MonthlyCharges'], errors='coerce')
 df['TotalCharges']   = pd.to_numeric(df['TotalCharges'],   errors='coerce')
 df['tenure']         = pd.to_numeric(df['tenure'],         errors='coerce')
 
+# Corrección TotalCharges = 0 si tenure=0 y rellenar NaN con MonthlyCharges*tenure
 df.loc[df['tenure'] == 0, 'TotalCharges'] = 0
 mask_tc_nan = df['TotalCharges'].isna()
 df.loc[mask_tc_nan, 'TotalCharges'] = df.loc[mask_tc_nan, 'MonthlyCharges'] * df.loc[mask_tc_nan, 'tenure']
 
+# Limpieza de categóricas
 cat_cols = ['gender','InternetService','StreamingTV','StreamingMovies',
             'Contract','PaymentMethod','PaperlessBilling','Churn']
 for c in cat_cols:
     if c in df.columns:
         df[c] = df[c].astype(str).str.strip()
 
+# Variables de trabajo
 df['Tenure'] = df['tenure']
 df = df[['Churn','MonthlyCharges','Tenure','Contract']].copy()
 
-# Si existe endpoint real de predicción por lote, se pone la URL aquí (opcional)
-API_URL_BATCH = "http://127.0.0.1:8000/predict_batch"  # p.ej. "http://localhost:5000/predict_batch" (payload: {"records":[...]}, resp: {"probas":[...]})
+# =========================
+# Scoring (demo) + Riesgo
+# =========================
+def simple_fallback_scoring(contract: str, tenure: float, charges: float) -> float:
+    """
+    Heurística determinística de demostración (sustituir por tu modelo real).
+    """
+    base = 0.2
+    if contract == "Month-to-month":
+        base += 0.25
+    elif contract == "One year":
+        base += 0.10
+    else:
+        base += 0.05
+    base += max(0, (70 - (tenure or 0))) / 140.0
+    base += max(0, (charges or 0) - 60) / 200.0
+    return float(np.clip(base, 0.01, 0.99))
+
+def add_risk_column(data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Si existe API por lote y responde OK, usa esas probabilidades.
+    Si no, usa el fallback determinístico.
+    """
+    d = data.copy()
+    if API_URL_BATCH:
+        try:
+            payload = d[["Contract", "Tenure", "MonthlyCharges"]].to_dict(orient="records")
+            r = requests.post(API_URL_BATCH, json={"records": payload}, timeout=8)
+            r.raise_for_status()
+            probs = r.json().get("probas", [])
+            if len(probs) == len(d):
+                d["Risk"] = np.clip(probs, 0, 1.0)
+                return d
+        except Exception:
+            pass
+    # Fallback determinístico
+    d["Risk"] = [
+        simple_fallback_scoring(ct, tn, ch)
+        for ct, tn, ch in zip(d["Contract"], d["Tenure"], d["MonthlyCharges"])
+    ]
+    return d
+
+# Calcula RISK UNA SOLA VEZ (mejor performance)
+df = add_risk_column(df)
 
 # =========================
 # KPIs base
@@ -122,75 +161,6 @@ def fig_gauge(prob):
     fig.update_layout(margin=dict(l=20, r=20, t=60, b=20))
     return fig
 
-# ===== Scoring (demo) para visualizar "lo que hace" =====
-def simple_fallback_scoring(contract: str, tenure: float, charges: float) -> float:
-    base = 0.2
-    if contract == "Month-to-month":
-        base += 0.25
-    elif contract == "One year":
-        base += 0.10
-    else:
-        base += 0.05
-    base += max(0, (70 - (tenure or 0))) / 140.0
-    base += max(0, (charges or 0) - 60) / 200.0
-    return float(np.clip(base, 0.01, 0.99))
-
-def add_risk_column(data: pd.DataFrame) -> pd.DataFrame:
-    d = data.copy()
-    # llamar y llenar Risk = proba si hay api por lote
-    if API_URL_BATCH:
-        try:
-            payload = d[["Contract", "Tenure", "MonthlyCharges"]].to_dict(orient="records")
-            r = requests.post(API_URL_BATCH, json={"records": payload}, timeout=8)
-            r.raise_for_status()
-            probs = r.json().get("probas", [])
-            if len(probs) == len(d):
-                d["Risk"] = np.clip(probs, 0, 1.0)
-                return d
-        except Exception:
-            pass
-    # Fallback determinístico para visualizar
-    d["Risk"] = [
-        simple_fallback_scoring(ct, tn, ch)
-        for ct, tn, ch in zip(d["Contract"], d["Tenure"], d["MonthlyCharges"])
-    ]
-    return d
-
-# ====== CORREGIDO: heatmap sin Interval (JSON-serializable) ======
-def fig_riskmap(data: pd.DataFrame):
-    d = data.copy()
-    # Bins
-    d["Tenure_bin"]  = pd.cut(d["Tenure"], bins=[0,6,12,24,36,48,60,72], include_lowest=True)
-    d["Charges_bin"] = pd.cut(d["MonthlyCharges"], bins=[20,40,60,80,100,120], include_lowest=True)
-
-    # Matriz de riesgo promedio (evita FutureWarning con observed=False)
-    piv = d.pivot_table(
-        index="Tenure_bin",
-        columns="Charges_bin",
-        values="Risk",
-        aggfunc="mean",
-        observed=False
-    )
-
-    # Convertir Interval -> string (clave para serializar)
-    x_labels = [f"{c.left:.0f}-{c.right:.0f}" for c in piv.columns]
-    y_labels = [f"{r.left:.0f}-{r.right:.0f}" for r in piv.index]
-    z = piv.to_numpy()
-
-    # Heatmap
-    fig = go.Figure(data=go.Heatmap(
-        x=x_labels, y=y_labels, z=z,
-        colorscale="Reds", zmin=0, zmax=1,
-        colorbar=dict(title="Prob.")
-    ))
-    fig.update_layout(
-        title="Mapa de riesgo (Tenure vs MonthlyCharges)",
-        xaxis_title="MonthlyCharges ($)",
-        yaxis_title="Tenure (meses)",
-        margin=dict(l=40, r=20, t=60, b=40)
-    )
-    return fig
-
 def fig_risk_by_contract(data: pd.DataFrame):
     g = (data.groupby("Contract", as_index=False)
             .agg(Risk=("Risk","mean"), N=("Risk","size"))
@@ -203,6 +173,43 @@ def fig_risk_by_contract(data: pd.DataFrame):
     )
     fig.update_traces(textposition="outside", cliponaxis=False)
     fig.update_layout(margin=dict(l=20,r=20,t=60,b=40), coloraxis_showscale=False)
+    return fig
+
+# ===== Heatmap corregido: sin celdas grises y labels serializables =====
+def fig_riskmap(data: pd.DataFrame):
+    d = data.copy()
+    # Bins
+    d["Tenure_bin"]  = pd.cut(d["Tenure"], bins=[0,6,12,24,36,48,60,72], include_lowest=True)
+    d["Charges_bin"] = pd.cut(d["MonthlyCharges"], bins=[20,40,60,80,100,120], include_lowest=True)
+
+    # Matriz de riesgo promedio
+    piv = d.pivot_table(
+        index="Tenure_bin",
+        columns="Charges_bin",
+        values="Risk",
+        aggfunc="mean",
+        observed=False
+    )
+
+    # Etiquetas legibles
+    x_labels = [f"{c.left:.0f}-{c.right:.0f}" for c in piv.columns]
+    y_labels = [f"{r.left:.0f}-{r.right:.0f}" for r in piv.index]
+
+    z = piv.to_numpy()
+    # Enmascarar celdas sin datos
+    z = np.where(np.isfinite(z), z, None)
+
+    fig = go.Figure(data=go.Heatmap(
+        x=x_labels, y=y_labels, z=z,
+        colorscale="Reds", zmin=0, zmax=1,
+        colorbar=dict(title="Prob.")
+    ))
+    fig.update_layout(
+        title="Mapa de riesgo (Tenure vs MonthlyCharges)",
+        xaxis_title="MonthlyCharges ($)",
+        yaxis_title="Tenure (meses)",
+        margin=dict(l=40, r=20, t=60, b=40)
+    )
     return fig
 
 # =========================
@@ -252,7 +259,8 @@ app.layout = html.Div([
                 dcc.RangeSlider(
                     id="flt-tenure",
                     min=tenure_min, max=tenure_max, step=1, value=[tenure_min, tenure_max],
-                    marks={0:"0", 12:"12", 24:"24", 36:"36", 48:"48", 60:"60", 72:"72"}
+                    marks={0:"0", 12:"12", 24:"24", 36:"36", 48:"48", 60:"60", 72:"72"},
+                    updatemode="mouseup"
                 ),
 
                 html.Label("MonthlyCharges ($)", style={"fontWeight": 600, "marginTop": "12px"}),
@@ -260,7 +268,8 @@ app.layout = html.Div([
                     id="flt-charges",
                     min=round(charge_min, 0), max=round(charge_max, 0), step=1,
                     value=[round(charge_min, 0), round(charge_max, 0)],
-                    marks={20:"20", 40:"40", 60:"60", 80:"80", 100:"100", 120:"120"}
+                    marks={20:"20", 40:"40", 60:"60", 80:"80", 100:"100", 120:"120"},
+                    updatemode="mouseup"
                 ),
 
                 html.Hr(),
@@ -310,6 +319,17 @@ app.layout = html.Div([
                             style={"marginTop":"12px","padding":"10px 14px","borderRadius":"12px",
                                    "border":"1px solid #111827","background":"#111827","color":"white",
                                    "cursor":"pointer","fontWeight":600, "width":"100%"}),
+
+                html.Div(style={"display":"flex","gap":"8px","marginTop":"10px"}, children=[
+                    html.Button("Reset filtros", id="btn-reset",
+                                style={"flex":"1","padding":"8px 12px","borderRadius":"10px",
+                                       "border":"1px solid #e5e7eb","background":"white","cursor":"pointer"}),
+                    html.Button("Descargar CSV", id="btn-download",
+                                style={"flex":"1","padding":"8px 12px","borderRadius":"10px",
+                                       "border":"1px solid #111827","background":"#111827","color":"white","cursor":"pointer"})
+                ]),
+                dcc.Download(id="download-data"),
+
                 html.Div(id="score-msg", style={"color":"#6b7280","fontSize":"12px","marginTop":"6px"})
             ]),
         ], style={
@@ -339,7 +359,7 @@ app.layout = html.Div([
 ], style={"backgroundColor": "#f8f9fc", "padding": "16px"})
 
 # =========================
-# Callbacks
+# Filtros y Callbacks
 # =========================
 def apply_filters(data: pd.DataFrame, contract_sel, churn_sel, tenure_rng, charge_rng):
     d = data.copy()
@@ -364,13 +384,10 @@ def apply_filters(data: pd.DataFrame, contract_sel, churn_sel, tenure_rng, charg
     Input("chart-type", "value")
 )
 def update_dashboard(contract_sel, churn_sel, tenure_rng, charge_rng, chart_type):
-    d = apply_filters(df, contract_sel, churn_sel, tenure_rng, charge_rng)
+    d = apply_filters(df, contract_sel, churn_sel, tenure_rng, charge_rng)  # df ya tiene 'Risk'
 
-    # Añadimos columna de riesgo para que el gráfico principal refleje "lo que hace"
-    d_risk = add_risk_column(d)
-
-    churn_rate, avg_monthly, avg_tenure, total_customers = calc_kpis(d)
-    avg_risk = d_risk["Risk"].mean() * 100 if len(d_risk) else 0.0
+    churn_rate, avg_monthly, avg_tenure, _ = calc_kpis(d)
+    avg_risk = d["Risk"].mean() * 100 if len(d) else 0.0
 
     kpis = [
         kpi_card("Churn Rate", f"{churn_rate:.1f}%", "#EF553B"),
@@ -379,11 +396,11 @@ def update_dashboard(contract_sel, churn_sel, tenure_rng, charge_rng, chart_type
         kpi_card("Avg Tenure", f"{avg_tenure:.1f} meses", "#636EFA"),
     ]
 
-    # Gráfico principal con opciones "de riesgo" y "EDA"
+    # Gráfico principal
     if chart_type == "riskmap":
-        fig = fig_riskmap(d_risk if len(d_risk) else d_risk.iloc[0:0])
+        fig = fig_riskmap(d if len(d) else d.iloc[0:0])
     elif chart_type == "riskcontract":
-        fig = fig_risk_by_contract(d_risk if len(d_risk) else d_risk.iloc[0:0])
+        fig = fig_risk_by_contract(d if len(d) else d.iloc[0:0])
     elif chart_type == "pie":
         fig = fig_pie(d if len(d) else df.iloc[0:0])
     elif chart_type == "contract":
@@ -393,7 +410,11 @@ def update_dashboard(contract_sel, churn_sel, tenure_rng, charge_rng, chart_type
     else:
         fig = fig_box(d if len(d) else df.iloc[0:0])
 
-    n_text = f"Muestra filtrada: {len(d):,} registros"
+    # Conteo detallado
+    n_yes = int((d["Churn"]=="Yes").sum()) if len(d) else 0
+    n_no  = int((d["Churn"]=="No").sum())  if len(d) else 0
+    n_text = f"Muestra filtrada: {len(d):,} registros — Yes: {n_yes:,} | No: {n_no:,}"
+
     return kpis, fig, n_text
 
 # ===== Scoring individual (gauge) =====
@@ -410,5 +431,45 @@ def score_customer(n_clicks, ct, tn, ch):
     prob = simple_fallback_scoring(ct, float(tn or 0), float(ch or 0))
     return fig_gauge(prob), "Probabilidad estimada (demo). Conecta tu endpoint para valores reales."
 
+# ===== Reset filtros =====
+@app.callback(
+    Output("flt-contract", "value"),
+    Output("flt-churn", "value"),
+    Output("flt-tenure", "value"),
+    Output("flt-charges", "value"),
+    Input("btn-reset", "n_clicks"),
+    prevent_initial_call=True
+)
+def reset_filters(n_clicks):
+    return (
+        list(df["Contract"].unique()),
+        ["Yes", "No"],
+        [int(df["Tenure"].min()), int(df["Tenure"].max())],
+        [float(df["MonthlyCharges"].min()), float(df["MonthlyCharges"].max())]
+    )
+
+# ===== Descargar CSV filtrado (FIX sin paréntesis extra) =====
+@app.callback(
+    Output("download-data", "data"),
+    Input("btn-download", "n_clicks"),
+    State("flt-contract", "value"),
+    State("flt-churn", "value"),
+    State("flt-tenure", "value"),
+    State("flt-charges", "value"),
+    prevent_initial_call=True
+)
+def download_filtered(n_clicks, contract_sel, churn_sel, tenure_rng, charge_rng):
+    d = apply_filters(df, contract_sel, churn_sel, tenure_rng, charge_rng)
+    cols = [c for c in ["Churn","Risk","MonthlyCharges","Tenure","Contract"] if c in d.columns] + \
+           [c for c in d.columns if c not in ["Churn","Risk","MonthlyCharges","Tenure","Contract"]]
+    csv_string = d[cols].to_csv(index=False, encoding="utf-8")
+    return dcc.send_bytes(lambda b: b.write(csv_string.encode("utf-8")), "telco_filtered.csv")
+
+# =========================
+# Run (local y despliegues)
+# =========================
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 8050))      # Railway/Render/Heroku definen PORT
+    host = os.environ.get("HOST", "127.0.0.1")    # En nube usa HOST=0.0.0.0
+    print(f"\nDash corriendo en: http://{host}:{port}/\n")
+    app.run(debug=True, host=host, port=port)

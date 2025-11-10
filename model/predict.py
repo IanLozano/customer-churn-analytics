@@ -2,10 +2,10 @@
 import pandas as pd
 import mlflow.pyfunc
 
-# Ajusta esta ruta a tu carpeta artifacts (usa r"" en Windows):
+# ruta a la carpeta artifacts:
 MODEL_PATH = r"mlruns/861949064364458891/models/m-f6764e0be71e4524bc1a9af2e6179144/artifacts"
 
-# Carga el modelo guardado por MLflow
+# Carga modelo guardado por MLflow
 _model = mlflow.pyfunc.load_model(MODEL_PATH)
 
 def make_prediction(input_data: pd.DataFrame):

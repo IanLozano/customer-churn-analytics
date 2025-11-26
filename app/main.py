@@ -3,25 +3,20 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
-import numpy as np
+import joblib
+import os
 
-try:
-    from model.predict import make_prediction
-except Exception:
-    make_prediction = None
+# Cargar pipeline
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "model", "pipeline_model.pkl")
+MODEL_PATH = os.path.abspath(MODEL_PATH)
 
-def simple_fallback_scoring(contract, tenure, charges):
-    base = 0.2
-    if contract == "Month-to-month":
-        base += 0.25
-    elif contract == "One year":
-        base += 0.10
-    else:
-        base += 0.05
-    base += max(0, (70 - (tenure or 0))) / 140.0
-    base += max(0, (charges or 0) - 60) / 200.0
-    return float(np.clip(base, 0.01, 0.99))
+print("Ruta del modelo:", MODEL_PATH)
+if not os.path.exists(MODEL_PATH):
+    raise RuntimeError(f"No se encontró el modelo en {MODEL_PATH}")
 
+model = joblib.load(MODEL_PATH)
+
+# Pydantic
 class Record(BaseModel):
     Contract: str
     Tenure: float
@@ -31,6 +26,7 @@ class BatchIn(BaseModel):
     records: List[Record]
 
 app = FastAPI()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -38,41 +34,42 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def _predict_batch(df):
-    if make_prediction is not None:
-        try:
-            out = make_prediction(input_data=df)
-            if isinstance(out, dict):
-                if "probabilities" in out:
-                    probs = out["probabilities"]
-                    if isinstance(probs[0], (list, tuple)):
-                        return [float(p[1]) for p in probs]
-                    return [float(p) for p in probs]
-                if "probas" in out:
-                    return [float(p) for p in out["probas"]]
-            if hasattr(out, "columns"):
-                for col in ["proba_yes", "prob_yes", "p_yes", "churn_proba"]:
-                    if col in out.columns:
-                        return [float(p) for p in out[col].to_list()]
-        except Exception:
-            pass
-    return [simple_fallback_scoring(r.Contract, r.Tenure, r.MonthlyCharges)
-            for r in df.itertuples(index=False)]
-
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+def run_model(df: pd.DataFrame):
+    # Alinear nombres de columnas con el pipeline
+    df = df.copy()
+    # El pipeline se entrenó con 'tenure' en minúsculas
+    df.rename(columns={"Tenure": "tenure"}, inplace=True)
+
+    # Asegurar tipos
+    df["MonthlyCharges"] = pd.to_numeric(df["MonthlyCharges"], errors="coerce")
+    df["tenure"] = pd.to_numeric(df["tenure"], errors="coerce")
+    df["Contract"] = df["Contract"].astype(str).str.strip()
+
+    proba = model.predict_proba(df)[:, 1]
+    return proba.tolist()
 
 @app.post("/predict_batch")
 def predict_batch(req: BatchIn):
     if not req.records:
         raise HTTPException(status_code=400, detail="no records")
+
     df = pd.DataFrame([r.model_dump() for r in req.records])
-    probas = _predict_batch(df)
+    try:
+        probas = run_model(df)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"error al predecir: {e}")
+
     return {"probas": probas}
 
 @app.post("/predict")
 def predict_one(rec: Record):
     df = pd.DataFrame([rec.model_dump()])
-    proba = _predict_batch(df)[0]
+    try:
+        proba = run_model(df)[0]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"error al predecir: {e}")
     return {"proba": proba}
